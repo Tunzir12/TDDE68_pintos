@@ -22,8 +22,8 @@
 char *my_strdup(const char *original)
 {
   int length = strlen(original);
-  char *copy = malloc(sizeof(char) * length);
-  for (int i = 0; i < length; i++)
+  char *copy = malloc(sizeof(char) * (length+1));
+  for (int i = 0; i <= length; i++)
     copy[i] = original[i];
   return copy;
 }
