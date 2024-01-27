@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MAX_WORDS 32   // Maximum number of words in the string
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 static void dump_stack(const void* esp);
@@ -46,7 +47,63 @@ tid_t process_execute(const char* cmd_line)
 		palloc_free_page(cl_copy);
 	return tid;
 }
+bool argument_passing(void** esp,char* file_name, char* arguments){
+	void* ptr_save = PHYS_BASE;
+	int offset=0;
+	int argc=0;
+	int space_for_argv=0;
 
+	uint32_t* argv[MAX_WORDS];
+
+	//store the file_name as string on stack
+	char* change_here=ptr_save;
+	int length=strlen(file_name)+1;//plus the null terminate 
+	change_here=(char*)(change_here-length);
+	strlcpy(change_here,file_name,length);
+	argv[argc]=(uint32_t*) change_here;
+	space_for_argv+=length;
+	argc++;
+
+
+	//store the argument as string on stack
+	char* token=strtok_r(arguments," ",&arguments);
+	while(token!=NULL && argc<MAX_WORDS){
+		
+		length=strlen(token)+1;//plus the null terminate 
+		change_here=(char*)(change_here-length);
+		strlcpy(change_here,token,length);
+		argv[argc]=(uint32_t*) change_here;
+		argc++;
+		space_for_argv+=length;
+		token=strtok_r(NULL," ",&arguments);
+	}
+	if(argc>=MAX_WORDS){
+		return false;
+	}
+
+	while(space_for_argv%4!=0){
+			space_for_argv++;
+			}
+	offset=space_for_argv+(argc+1)*4+12;
+
+
+	//set up the stack for argv[]
+	int i;
+	for(i=argc-1;i>=0;i--){
+		uint32_t* wt_uint32 = (uint32_t*) (ptr_save - space_for_argv-4*(argc+1-i));
+		uint32_t* arg=argv[i];
+		*wt_uint32=arg;
+	}
+
+	//set up the stack for argv,argc,ret address
+	uint32_t* set_argv = (uint32_t*) (ptr_save - space_for_argv-4*(argc+1)-4);
+	uint32_t* set_argc = (int*) (ptr_save - space_for_argv-4*(argc+1)-8);
+	*set_argv=ptr_save - space_for_argv-4*(argc+1);
+	*set_argc=argc;
+
+	*esp = PHYS_BASE-offset;
+	return true;
+}
 /* A thread function that loads a user process and starts it
 	running. */
 static void start_process(void* cmd_line_)
@@ -62,8 +119,16 @@ static void start_process(void* cmd_line_)
 	if_.eflags = FLAG_IF | FLAG_MBS;
 	
 	// Note: load requires the file name only, not the entire cmd_line
-	success = load(cmd_line, &if_.eip, &if_.esp);
-
+	char*ptr_save;
+	char *file_name=strtok_r(cmd_line," ",&ptr_save);
+	success = load(file_name, &if_.eip, &if_.esp);
+	if(success){
+		//set up user stack
+		success=argument_passing(&if_.esp,file_name,ptr_save);
+	}
+	if(success){
+		dump_stack(if_.esp);
+	}
 	/* If load failed, quit. */
 	palloc_free_page(cmd_line);
 	if (!success)
