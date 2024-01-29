@@ -62,7 +62,11 @@ static void start_process(void* cmd_line_)
 	if_.eflags = FLAG_IF | FLAG_MBS;
 	
 	// Note: load requires the file name only, not the entire cmd_line
-	success = load(cmd_line, &if_.eip, &if_.esp);
+	char *file_name, *save_ptr;
+
+	file_name = strtok_r(cmd_line, " ", &save_ptr);
+
+	success = load(file_name, &if_.eip, &if_.esp);
 
 	/* If load failed, quit. */
 	palloc_free_page(cmd_line);
@@ -432,9 +436,11 @@ static bool setup_stack(void** esp)
 	if (kpage != NULL) {
 		success = install_page(((uint8_t*) PHYS_BASE) - PGSIZE, kpage, true);
 		if (success)
-			*esp = PHYS_BASE - 12;
+			*esp = PHYS_BASE;
 		else
 			palloc_free_page(kpage);
+
+		dump_stack(esp);
 	}
 	return success;
 }
