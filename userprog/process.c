@@ -20,6 +20,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define  MAX_ARGUMENT = 32 ;
+
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 static void dump_stack(const void* esp);
@@ -32,6 +34,7 @@ tid_t process_execute(const char* cmd_line)
 {
 	char* cl_copy;
 	tid_t tid;
+
 
 	/* Make a copy of CMD_LINE.
 		Otherwise there's a race between the caller and load(). */
@@ -54,6 +57,9 @@ static void start_process(void* cmd_line_)
 	char* cmd_line = cmd_line_;
 	struct intr_frame if_;
 	bool success;
+	char *file_name, *save_ptr;
+
+	file_name = strtok_r(cmd_line, " ", &save_ptr);
 
 	/* Initialize interrupt frame and load executable. */
 	memset(&if_, 0, sizeof if_);
@@ -62,16 +68,59 @@ static void start_process(void* cmd_line_)
 	if_.eflags = FLAG_IF | FLAG_MBS;
 	
 	// Note: load requires the file name only, not the entire cmd_line
-	char *file_name, *save_ptr;
-
-	file_name = strtok_r(cmd_line, " ", &save_ptr);
-
 	success = load(file_name, &if_.eip, &if_.esp);
+
+	if (success)
+    {
+		uint32_t *addrs[MAX_ARGUMENT];
+		char ** argv = malloc(sizeof(char *)*MAX_ARGUMENT);
+        int argc = 0;
+		int i = 0;
+    	char* token;
+    	for (token = strtok_r(cmd_line, " ", &save_ptr); token != NULL;
+		 		token = strtok_r(NULL, " ", &save_ptr)) {
+        		if_.esp -= strlen(token) + 1;
+        		strlcpy(if_.esp, token, strlen(token) + 1);
+				argv[i++] = if_.esp;
+        		argc++;
+    		}
+
+    // Word-align the stack pointer
+    while ((uint32_t)if_.esp % 4 != 0) {
+        if_.esp--;
+    }
+
+
+    // Push null sentinel
+    if_.esp -= sizeof(char*);
+    *((char**)if_.esp) = NULL;
+
+    // Push argv pointers
+    for (i = argc - 1; i >= 0; i--) {
+        if_.esp -= sizeof(char*);
+        *((char**)if_.esp) = argv[i];
+    }
+
+    // Push argv pointer
+    char** argv_ptr = (char**)if_.esp;
+    if_.esp -= sizeof(char**);
+    *((char***)if_.esp) = argv_ptr;
+
+    // Push argc
+    if_.esp -= sizeof(int);
+    *((int*)if_.esp) = argc;
+
+    // Call dump_stack
+    dump_stack(if_.esp);
+
+    }
+
 
 	/* If load failed, quit. */
 	palloc_free_page(cmd_line);
 	if (!success)
 		thread_exit();
+
 
 	/* Start the user process by simulating a return from an
 		interrupt, implemented by intr_exit (in
@@ -439,9 +488,8 @@ static bool setup_stack(void** esp)
 			*esp = PHYS_BASE;
 		else
 			palloc_free_page(kpage);
-
-		dump_stack(esp);
 	}
+
 	return success;
 }
 
