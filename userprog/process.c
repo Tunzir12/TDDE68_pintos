@@ -20,8 +20,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define  MAX_ARGUMENT = 32 ;
 
+#define MAX_ARGUMENT 32
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 static void dump_stack(const void* esp);
@@ -77,41 +77,44 @@ static void start_process(void* cmd_line_)
         int argc = 0;
 		int i = 0;
     	char* token;
+
+		//set up the filename as string
     	for (token = strtok_r(cmd_line, " ", &save_ptr); token != NULL;
 		 		token = strtok_r(NULL, " ", &save_ptr)) {
         		if_.esp -= strlen(token) + 1;
         		strlcpy(if_.esp, token, strlen(token) + 1);
-				argv[i++] = if_.esp;
+				argv[argc] = if_.esp;
         		argc++;
     		}
 
-    // Word-align the stack pointer
-    while ((uint32_t)if_.esp % 4 != 0) {
+    	// Word-align the stack pointer
+    	while ((uint32_t)if_.esp % 4 != 0) {
         if_.esp--;
-    }
+    	}
+ 
 
-
-    // Push null sentinel
-    if_.esp -= sizeof(char*);
-    *((char**)if_.esp) = NULL;
-
-    // Push argv pointers
-    for (i = argc - 1; i >= 0; i--) {
+    	// Push argv pointers
+    	for (i = argc - 1; i >= 0; i--) {
         if_.esp -= sizeof(char*);
         *((char**)if_.esp) = argv[i];
-    }
+    	}
 
-    // Push argv pointer
-    char** argv_ptr = (char**)if_.esp;
-    if_.esp -= sizeof(char**);
-    *((char***)if_.esp) = argv_ptr;
+  	
+    	// Push null sentinel
+    	if_.esp -= sizeof(char*);
+    	*((char**)if_.esp) = NULL;
 
-    // Push argc
-    if_.esp -= sizeof(int);
-    *((int*)if_.esp) = argc;
+		// Push argv pointer
+    	char** argv_ptr = (char**)if_.esp;
+    	if_.esp -= sizeof(char**);
+    	*((char***)if_.esp) = argv_ptr;
 
-    // Call dump_stack
-    dump_stack(if_.esp);
+    	// Push argc
+    	if_.esp -= sizeof(int);
+    	*((int*)if_.esp) = argc;
+
+    	// Call dump_stack
+    	dump_stack(if_.esp);
 
     }
 
