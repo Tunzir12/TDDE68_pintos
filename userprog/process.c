@@ -22,6 +22,8 @@
 
 
 #define MAX_ARGUMENT 32
+
+
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 static void dump_stack(const void* esp);
@@ -34,7 +36,6 @@ tid_t process_execute(const char* cmd_line)
 {
 	char* cl_copy;
 	tid_t tid;
-
 
 	/* Make a copy of CMD_LINE.
 		Otherwise there's a race between the caller and load(). */
@@ -72,51 +73,66 @@ static void start_process(void* cmd_line_)
 
 	if (success)
     {
-		uint32_t *addrs[MAX_ARGUMENT];
-		char ** argv = malloc(sizeof(char *)*MAX_ARGUMENT);
-        int argc = 0;
-		int i = 0;
-    	char* token;
+		void* ptr = PHYS_BASE;
+		int offset=0;
+		int argc=0;
+		int space_for_argv=0;
 
-		//set up the filename as string
-    	for (token = strtok_r(cmd_line, " ", &save_ptr); token != NULL;
-		 		token = strtok_r(NULL, " ", &save_ptr)) {
-        		if_.esp -= strlen(token) + 1;
-        		strlcpy(if_.esp, token, strlen(token) + 1);
-				argv[argc] = if_.esp;
-        		argc++;
-    		}
+		uint32_t* argv[MAX_ARGUMENT];
 
-    	// Word-align the stack pointer
-    	while ((uint32_t)if_.esp % 4 != 0) {
-        if_.esp--;
-    	}
- 
+		//store the file_name as string on stack
+		char* change = ptr;
+		int length = strlen(file_name)+1;//plus the null terminate 
+		change = (char*)(change-length);
+		strlcpy(change,file_name,length);
+		argv[argc]=(uint32_t*) change;
+		space_for_argv+=length;
+		argc++;
 
-    	// Push argv pointers
-    	for (i = argc - 1; i >= 0; i--) {
-        if_.esp -= sizeof(char*);
-        *((char**)if_.esp) = argv[i];
-    	}
 
-  	
-    	// Push null sentinel
-    	if_.esp -= sizeof(char*);
-    	*((char**)if_.esp) = NULL;
+		//store the argument as string on stack
+		char* token = strtok_r(save_ptr," ",&save_ptr);
+		while(token != NULL && argc <MAX_ARGUMENT){
+		
+			length=strlen(token)+1;//plus the null terminate 
+			change=(char*)(change-length);
+			strlcpy(change,token,length);
+			argv[argc]=(uint32_t*) change;
+			argc++;
+			space_for_argv+=length;
+			token=strtok_r(NULL," ",&save_ptr);
+		}
+		if(argc>=MAX_ARGUMENT){
+			return false;
+		}
 
-		// Push argv pointer
-    	char** argv_ptr = (char**)if_.esp;
-    	if_.esp -= sizeof(char**);
-    	*((char***)if_.esp) = argv_ptr;
+		while(space_for_argv%4!=0){
+				space_for_argv++;
+			}
+		offset=space_for_argv+(argc+1)*4+12;
 
-    	// Push argc
-    	if_.esp -= sizeof(int);
-    	*((int*)if_.esp) = argc;
 
-    	// Call dump_stack
-    	dump_stack(if_.esp);
+		//set up the stack for argv[]
+		int i;
+		for(i=argc-1;i>=0;i--){
+			uint32_t* wt_uint32 = (uint32_t*) (ptr - space_for_argv-4*(argc+1-i));
+			uint32_t* arg=argv[i];
+			*wt_uint32=arg;
+		}
+
+		//set up the stack for argv,argc,ret address
+		uint32_t* set_argv = (uint32_t*) (ptr - space_for_argv-4*(argc+1)-4);
+		uint32_t* set_argc = (int*) (ptr - space_for_argv-4*(argc+1)-8);
+		*set_argv = ptr - space_for_argv-4*(argc+1);
+		*set_argc = argc;
+
+		*&if_.esp = PHYS_BASE-offset;
+
 
     }
+
+	if(success)     	// Call dump_stack
+    	dump_stack(if_.esp);
 
 
 	/* If load failed, quit. */
