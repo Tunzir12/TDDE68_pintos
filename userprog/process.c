@@ -73,7 +73,6 @@ static void start_process(void* cmd_line_)
 
 	if (success)
     {
-		void* ptr = PHYS_BASE;
 		int offset=0;
 		int argc=0;
 		int space_for_argv=0;
@@ -81,7 +80,7 @@ static void start_process(void* cmd_line_)
 		uint32_t* argv[MAX_ARGUMENT];
 
 		//store the file_name as string on stack
-		char* change = ptr;
+		char* change = PHYS_BASE;
 		int length = strlen(file_name)+1;//plus the null terminate 
 		change = (char*)(change-length);
 		strlcpy(change,file_name,length);
@@ -92,7 +91,7 @@ static void start_process(void* cmd_line_)
 
 		//store the argument as string on stack
 		char* token = strtok_r(save_ptr," ",&save_ptr);
-		while(token != NULL && argc <MAX_ARGUMENT){
+		while(token != NULL && argc < MAX_ARGUMENT){
 		
 			length=strlen(token)+1;//plus the null terminate 
 			change=(char*)(change-length);
@@ -102,28 +101,25 @@ static void start_process(void* cmd_line_)
 			space_for_argv+=length;
 			token=strtok_r(NULL," ",&save_ptr);
 		}
-		if(argc>=MAX_ARGUMENT){
-			return false;
-		}
 
 		while(space_for_argv%4!=0){
 				space_for_argv++;
 			}
-		offset=space_for_argv+(argc+1)*4+12;
+		offset = space_for_argv+(argc+1)*4+12;
 
 
 		//set up the stack for argv[]
 		int i;
 		for(i=argc-1;i>=0;i--){
-			uint32_t* wt_uint32 = (uint32_t*) (ptr - space_for_argv-4*(argc+1-i));
+			uint32_t* wt_uint32 = (uint32_t*) (PHYS_BASE - space_for_argv-4*(argc+1-i));
 			uint32_t* arg=argv[i];
 			*wt_uint32=arg;
 		}
 
-		//set up the stack for argv,argc,ret address
-		uint32_t* set_argv = (uint32_t*) (ptr - space_for_argv-4*(argc+1)-4);
-		uint32_t* set_argc = (int*) (ptr - space_for_argv-4*(argc+1)-8);
-		*set_argv = ptr - space_for_argv-4*(argc+1);
+		//set up the stack for argv,argc,return address
+		uint32_t* set_argv = (uint32_t*) (PHYS_BASE- space_for_argv-4*(argc+1)-4);
+		uint32_t* set_argc = (int*) (PHYS_BASE - space_for_argv-4*(argc+1)-8);
+		*set_argv = PHYS_BASE - space_for_argv-4*(argc+1);
 		*set_argc = argc;
 
 		*&if_.esp = PHYS_BASE-offset;
