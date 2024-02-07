@@ -51,6 +51,68 @@ tid_t process_execute(const char* cmd_line)
 	return tid;
 }
 
+bool user_arg (char* f_name, void** esp, char* savePtr){
+
+		int offset = 0;
+		int argc = 0;
+		int space_for_argv = 0;
+		char* file_name = f_name;
+		char* save_ptr = savePtr;
+
+
+		uint32_t* argv[MAX_ARGUMENT];
+
+		//store the file_name as string on stack
+		char* change = *esp;
+		int length = strlen(file_name)+1;//plus the null terminate 
+		change = (char*)(change - length);
+		strlcpy(change, file_name, length);
+		argv[argc]=(uint32_t*) change;
+		space_for_argv+=length;
+		argc++;
+
+
+		//store the argument as string on stack
+		char* token = strtok_r(save_ptr," ",&save_ptr);
+		while(token != NULL && argc < MAX_ARGUMENT){
+		
+			length=strlen(token)+1;//plus the null terminate 
+			change=(char*)(change-length);
+			strlcpy(change,token,length);
+			argv[argc]=(uint32_t*) change;
+			argc++;
+			space_for_argv+=length;
+			token=strtok_r(NULL," ",&save_ptr);
+		}
+		if (argc > MAX_ARGUMENT) {
+    		// Handle excess arguments, e.g., print error message or limit arguments
+    			return -1; // Or other appropriate error code
+}
+		//word align
+		while((space_for_argv % 4) != 0){
+				space_for_argv++;
+			}
+		offset = space_for_argv+((argc+1)*4)+12;
+
+
+		//set up the stack for argv[]
+		int i;
+		for(i=argc-1; i>=0; i--){
+			uint32_t* wt_uint32 = (uint32_t*) (*esp- space_for_argv-4*(argc+1-i));
+			uint32_t* arg=argv[i];
+			*wt_uint32=arg;
+		}
+
+		//set up the stack for argv,argc,return address
+		uint32_t *set_argv = *esp- space_for_argv- (4*(argc+1))-4;
+		uint32_t *set_argc = *esp - space_for_argv-4*(argc+1)-8;
+		*set_argv = *esp - space_for_argv- (4*(argc+1));
+		*set_argc = argc;
+
+		*esp = *esp-offset;
+		return true;
+}
+
 /* A thread function that loads a user process and starts it
 	running. */
 static void start_process(void* cmd_line_)
@@ -73,63 +135,9 @@ static void start_process(void* cmd_line_)
 
 	if (success)
     {
-		int offset=0;
-		int argc=0;
-		int space_for_argv=0;
-
-		uint32_t* argv[MAX_ARGUMENT];
-
-		//store the file_name as string on stack
-		char* change = PHYS_BASE;
-		int length = strlen(file_name)+1;//plus the null terminate 
-		change = (char*)(change-length);
-		strlcpy(change,file_name,length);
-		argv[argc]=(uint32_t*) change;
-		space_for_argv+=length;
-		argc++;
-
-
-		//store the argument as string on stack
-		char* token = strtok_r(save_ptr," ",&save_ptr);
-		while(token != NULL && argc < MAX_ARGUMENT){
-		
-			length=strlen(token)+1;//plus the null terminate 
-			change=(char*)(change-length);
-			strlcpy(change,token,length);
-			argv[argc]=(uint32_t*) change;
-			argc++;
-			space_for_argv+=length;
-			token=strtok_r(NULL," ",&save_ptr);
-		}
-
-		while(space_for_argv%4!=0){
-				space_for_argv++;
-			}
-		offset = space_for_argv+(argc+1)*4+12;
-
-
-		//set up the stack for argv[]
-		int i;
-		for(i=argc-1;i>=0;i--){
-			uint32_t* wt_uint32 = (uint32_t*) (PHYS_BASE - space_for_argv-4*(argc+1-i));
-			uint32_t* arg=argv[i];
-			*wt_uint32=arg;
-		}
-
-		//set up the stack for argv,argc,return address
-		uint32_t* set_argv = (uint32_t*) (PHYS_BASE- space_for_argv-4*(argc+1)-4);
-		uint32_t* set_argc = (int*) (PHYS_BASE - space_for_argv-4*(argc+1)-8);
-		*set_argv = PHYS_BASE - space_for_argv-4*(argc+1);
-		*set_argc = argc;
-
-		*&if_.esp = PHYS_BASE-offset;
-
-
+		success = user_arg(file_name, &if_.esp, save_ptr);
+		dump_stack(if_.esp);
     }
-
-	if(success)     	// Call dump_stack
-    	dump_stack(if_.esp);
-
 
 	/* If load failed, quit. */
 	palloc_free_page(cmd_line);
