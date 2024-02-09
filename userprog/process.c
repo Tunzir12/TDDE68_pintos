@@ -27,6 +27,7 @@
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 static void dump_stack(const void* esp);
+bool user_arg(void ** esp, char* file_name, char* save_ptr);
 
 /* Starts a new thread running a user program loaded from
 	CMD_LINE.  The new thread may be scheduled (and may even exit)
@@ -51,28 +52,8 @@ tid_t process_execute(const char* cmd_line)
 	return tid;
 }
 
-/* A thread function that loads a user process and starts it
-	running. */
-static void start_process(void* cmd_line_)
-{
-	char* cmd_line = cmd_line_;
-	struct intr_frame if_;
-	bool success;
-	char *file_name, *save_ptr;
+bool user_arg(void ** esp, char* file_name, char* save_ptr){
 
-	file_name = strtok_r(cmd_line, " ", &save_ptr);
-
-	/* Initialize interrupt frame and load executable. */
-	memset(&if_, 0, sizeof if_);
-	if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
-	if_.cs = SEL_UCSEG;
-	if_.eflags = FLAG_IF | FLAG_MBS;
-	
-	// Note: load requires the file name only, not the entire cmd_line
-	success = load(file_name, &if_.eip, &if_.esp);
-
-	if (success)
-    {
 		int offset=0;
 		int argc=0;
 		int space_for_argv=0;
@@ -80,7 +61,7 @@ static void start_process(void* cmd_line_)
 		uint32_t* argv[MAX_ARGUMENT];
 
 		//store the file_name as string on stack
-		char* change = PHYS_BASE;
+		char* change = *esp;
 		int length = strlen(file_name)+1;//plus the null terminate 
 		change = (char*)(change-length);
 		strlcpy(change,file_name,length);
@@ -111,25 +92,46 @@ static void start_process(void* cmd_line_)
 		//set up the stack for argv[]
 		int i;
 		for(i=argc-1;i>=0;i--){
-			uint32_t* wt_uint32 = (uint32_t*) (PHYS_BASE - space_for_argv-4*(argc+1-i));
+			uint32_t* wt_uint32 = (uint32_t*) (*esp - space_for_argv-4*(argc+1-i));
 			uint32_t* arg=argv[i];
 			*wt_uint32=arg;
 		}
 
 		//set up the stack for argv,argc,return address
-		uint32_t* set_argv = (uint32_t*) (PHYS_BASE- space_for_argv-4*(argc+1)-4);
-		uint32_t* set_argc = (int*) (PHYS_BASE - space_for_argv-4*(argc+1)-8);
-		*set_argv = PHYS_BASE - space_for_argv-4*(argc+1);
+		uint32_t* set_argv = (uint32_t*) (*esp - space_for_argv-4*(argc+1)-4);
+		uint32_t* set_argc = (uint32_t*) (*esp- space_for_argv-4*(argc+1)-8);
+		*set_argv = (*esp) - space_for_argv-4*(argc+1);
 		*set_argc = argc;
 
-		*&if_.esp = PHYS_BASE-offset;
+		*esp = *esp - offset;
 
+		return true;
+}
 
-    }
+/* A thread function that loads a user process and starts it
+	running. */
+static void start_process(void* cmd_line_)
+{
+	char* cmd_line = cmd_line_;
+	struct intr_frame if_;
+	bool success;
+	char *file_name, *save_ptr;
 
-	if(success)     	// Call dump_stack
-    	dump_stack(if_.esp);
+	file_name = strtok_r(cmd_line, " ", &save_ptr);
 
+	/* Initialize interrupt frame and load executable. */
+	memset(&if_, 0, sizeof if_);
+	if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+	if_.cs = SEL_UCSEG;
+	if_.eflags = FLAG_IF | FLAG_MBS;
+	
+	// Note: load requires the file name only, not the entire cmd_line
+	success = load(file_name, &if_.eip, &if_.esp);
+
+	if(success){
+		success = user_arg(&if_.esp , file_name, save_ptr);
+		dump_stack(if_.esp);
+	}   
 
 	/* If load failed, quit. */
 	palloc_free_page(cmd_line);
