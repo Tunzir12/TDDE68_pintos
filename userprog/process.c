@@ -27,6 +27,7 @@
 static thread_func start_process NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 static void dump_stack(const void* esp);
+bool user_arg(char* file_name,void** esp,  char * save_ptr);
 
 /* Starts a new thread running a user program loaded from
 	CMD_LINE.  The new thread may be scheduled (and may even exit)
@@ -60,27 +61,32 @@ bool user_arg (char* f_name, void** esp, char* savePtr){
 		char* save_ptr = savePtr;
 
 
-		uint32_t* argv[MAX_ARGUMENT];
+		uint32_t argv[MAX_ARGUMENT];
 
 		//store the file_name as string on stack
 		char* change = *esp;
 		int length = strlen(file_name)+1;//plus the null terminate 
 		change = (char*)(change - length);
 		strlcpy(change, file_name, length);
-		argv[argc]=(uint32_t*) change;
+		argv[argc++]=(uint32_t) change;
 		space_for_argv+=length;
-		argc++;
+		
 
 
 		//store the argument as string on stack
 		char* token = strtok_r(save_ptr," ",&save_ptr);
 		while(token != NULL && argc < MAX_ARGUMENT){
+
+			if (argc == MAX_ARGUMENT) {
+            // Handle excess arguments
+            break;
+        	}
 		
 			length=strlen(token)+1;//plus the null terminate 
 			change=(char*)(change-length);
 			strlcpy(change,token,length);
-			argv[argc]=(uint32_t*) change;
-			argc++;
+			change[length -1] ='\0' ;
+			argv[argc++]=(uint32_t) change;
 			space_for_argv+=length;
 			token=strtok_r(NULL," ",&save_ptr);
 		}
@@ -100,7 +106,7 @@ bool user_arg (char* f_name, void** esp, char* savePtr){
 		for(i=argc-1; i>=0; i--){
 			uint32_t* wt_uint32 = (uint32_t*) (*esp- space_for_argv-4*(argc+1-i));
 			uint32_t* arg=argv[i];
-			*wt_uint32=arg;
+			*wt_uint32 = arg;
 		}
 
 		//set up the stack for argv,argc,return address
@@ -109,7 +115,7 @@ bool user_arg (char* f_name, void** esp, char* savePtr){
 		*set_argv = *esp - space_for_argv- (4*(argc+1));
 		*set_argc = argc;
 
-		*esp = *esp-offset;
+		*esp = *esp - offset;
 		return true;
 }
 
@@ -556,7 +562,7 @@ static void dump_stack(const void* esp)
 		printf("%x\t", (uint32_t) whats_there);
 		// ... printable byte content ...
 		if (*whats_there >= 32 && *whats_there < 127)
-			printf("%c\t", *whats_there);
+			printf("%c\t",*whats_there);
 		else
 			printf(" \t");
 		// ... and 32-bit aligned content
