@@ -54,6 +54,10 @@
 		retval;                                                                          \
 	})
 
+void sleep(int millis){
+	syscall1(SYS_SLEEP, millis);
+}
+
 void halt(void)
 {
 	syscall0(SYS_HALT);

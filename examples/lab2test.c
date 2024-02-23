@@ -56,12 +56,13 @@ int main(void)
 {
 	char* dummyprint = "Hello, world!\n";
 	char* testdata = "sample file content";
-	bool created;
+	bool created, removed;
 	int fd;
 	int bytes_written;
 	int bytes_read;
 	char sbuf[READ_SIZE];
 
+//----------------SYS_WRITE--------------------------------------------
 	TITLE("TEST 1: Printing text\n");
 	bytes_written = write(STDOUT_FILENO, dummyprint, strlen(dummyprint));
 	if (bytes_written < 0 || (size_t) bytes_written != strlen(dummyprint)) {
@@ -70,7 +71,7 @@ int main(void)
 	else {
 		SUCCESS("TEST 1: Passed\n");
 	}
-
+//-----------------SYS_CREATE---------------------------------------
 	TITLE("TEST 2: Creating file\n");
 	created = create("test0", strlen(testdata));
 	if (!created) {
@@ -83,6 +84,8 @@ int main(void)
 	}
 
 	SUCCESS("TEST 2: Passed\n");
+
+//-----------------SYS_OPEN---------------------------------------
 
 	TITLE("TEST 3: Opening files\n");
 	int file_descriptors[FD_TEST_COUNT];
@@ -141,6 +144,8 @@ int main(void)
 
 	SUCCESS("TEST 3: Passed\n");
 
+//-----------------SYS_WRITE-------------------file--------------------
+
 	TITLE("TEST 4: Writing to file\n");
 	fd = open("test0");
 	bytes_written = write(fd, testdata, strlen(testdata));
@@ -153,7 +158,7 @@ int main(void)
 	close(fd);
 
 	SUCCESS("TEST 4: Passed\n");
-
+//-----------------SYS_READ-------------------file--------------------
 	TITLE("TEST 5: Reading from file\n");
 	fd = open("test0");
 	bytes_read = read(fd, sbuf, READ_SIZE);
@@ -171,7 +176,62 @@ int main(void)
 
 	SUCCESS("TEST 5: Passed\n");
 
-	TITLE("TEST 6: Reading from console\n");
+//-----------------SYS_REMOVE--------------------------------------------
+
+	TITLE("TEST 6: Removing file\n");
+	created = create("test1", strlen(testdata));
+	if (!created) {
+		ERROR("Could not create file \"test0\", does it already exist?\n");
+	}
+
+	printf("REMOVING: \n");
+	
+	removed = remove("test1");
+	if (!removed) {
+		ERROR("Failed to remove\n");
+	}else SUCCESS("TEST 6: Passed\n");
+
+//-----------------SYS_SLEEP--------------------------------------------
+
+	TITLE("TEST 7: testing the sleep\n");
+	int time = 5000;
+	//printf("The test should hang if sleep does not work \n");
+
+	sleep(time);
+	printf("Woke up from sleep\n");
+	SUCCESS("TEST 7: Passed\n");
+
+//-----------------SYS_FILESIZE--------------------------------------------
+
+	TITLE("TEST 8: Getting the filesize\n");
+	int size = strlen("test0");
+	fd = filesize(size);
+	printf("Filesize is %d \n", fd);
+
+	if (fd == NULL) {
+		ERROR("error in filesize\n");
+	}else	SUCCESS("TEST 8: Passed\n");
+
+//-----------------SYS_SEEK + SYS_TELL--------------------------------------------
+
+	 TITLE("TEST 9: SEEK and TELL\n");
+	 fd = open("test0");
+	 unsigned position = 5;
+	 seek(fd,position);
+	 unsigned newpos = tell(fd);
+	 printf("New position is %u\n", newpos);
+
+	 position = 7;
+	 seek(fd,position);
+	 newpos = tell(fd);
+	 printf("Latest New position is %u\n", newpos);
+
+	 if (newpos == NULL) {
+	 	ERROR("error in SEEK and TELL\n");
+	 }else	SUCCESS("TEST 9: Passed\n");
+
+//-----------------SYS_READ---------------console------------------------
+	TITLE("TEST 10: Reading from console\n");
 	printf("Type 10 characters: ");
 	bytes_read = read(STDIN_FILENO, sbuf, READ_CONSOLE_COUNT);
 	printf("\n");
@@ -183,7 +243,7 @@ int main(void)
 	}
 	printf("You have typed: %.*s\n", READ_CONSOLE_COUNT, sbuf);
 
-	SUCCESS("TEST 6: Passed\n");
+	SUCCESS("TEST 10: Passed\n");
 
 	TITLE(
 		 "The test suite should now exit. Since SYS_WAIT is not implemented yet, the "
@@ -194,3 +254,4 @@ int main(void)
 
 	ERROR("ERR: Thread did not exit.\n");
 }
+
