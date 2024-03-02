@@ -186,6 +186,13 @@ void process_exit(void)
 		pagedir_activate(NULL);
 		pagedir_destroy(pd);
 	}
+
+		int i;
+	for (i = 2 ; i <= 129 ; i++){
+		struct file* file = cur -> file_id[i];
+		//cur->file_id[i] = NULL;
+    	file_close(file);
+	}
 }
 
 /* Sets up the CPU for running user code in the current

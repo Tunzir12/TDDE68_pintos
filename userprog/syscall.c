@@ -155,7 +155,7 @@ int open(const char *fileName){
       return -1;
     }
 
-    for (int i = 2; i < 130; i++) {
+    for (int i = 2; i <= 129; i++) {
         if(thread->file_id[i] == NULL) {
           thread->file_id[i] = file;
           return i;
@@ -207,7 +207,6 @@ int filesize (int fd){
     }
     // Get the file size from the file structure
     int size = file_length(file); 
-#include "devices/timer.h"
     return size;
 }
 
@@ -232,11 +231,12 @@ int read (int fd, void *buffer, unsigned size){
 
     if (fd == 0) {
       for (int i = 0; i < size; i++) {
-          *((uint8_t*)buffer + i) = input_getc();
+          uint8_t key = *((uint8_t*)buffer + i) = input_getc() ;
+          printf("%c", (char)key);
         }
         return size;
     }
-
+    
     if(file != NULL){
       return file_read(file, buffer, size);
     }
@@ -246,14 +246,17 @@ int read (int fd, void *buffer, unsigned size){
 }
 
 void exit (int status){
+      printf("No fault  at the start here!!\n");
+
     struct thread* thread = thread_current();
-    // int fd = status ;
-    // close(fd);
-    // printf("file closed before exit\n");
+      printf("No fault  after thread!!\n");
 
     thread_exit();
+      printf("No fault  at the start here thread exit()!!\n");
+
     if(is_thread(thread)){
       status = -1;
+      printf("No fault here!!\n");
     }
     else{
       status = 0;

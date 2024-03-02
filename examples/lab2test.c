@@ -158,7 +158,7 @@ int main(void)
 	close(fd);
 
 	SUCCESS("TEST 4: Passed\n");
-//-----------------SYS_READ-------------------file--------------------
+//-----------------SYS_READ && SYS_Filesize-------------------file--------------------
 	TITLE("TEST 5: Reading from file\n");
 	fd = open("test0");
 	bytes_read = read(fd, sbuf, READ_SIZE);
@@ -172,6 +172,12 @@ int main(void)
 	if (memcmp(sbuf, testdata, strlen(testdata)) != 0) {
 		ERROR("Read content does not match what was written to file.\n");
 	}
+// including test for filesize function
+	int size = filesize(fd);
+	if(filesize != NULL){
+		printf("The size of this file is %d", size);
+	}
+
 	close(fd);
 
 	SUCCESS("TEST 5: Passed\n");
@@ -201,20 +207,9 @@ int main(void)
 	printf("Woke up from sleep\n");
 	SUCCESS("TEST 7: Passed\n");
 
-//-----------------SYS_FILESIZE--------------------------------------------
-
-	TITLE("TEST 8: Getting the filesize\n");
-	int size = strlen("test0");
-	fd = filesize(size);
-	printf("Filesize is %d \n", fd);
-
-	if (fd == NULL) {
-		ERROR("error in filesize\n");
-	}else	SUCCESS("TEST 8: Passed\n");
-
 //-----------------SYS_SEEK + SYS_TELL--------------------------------------------
 
-	 TITLE("TEST 9: SEEK and TELL\n");
+	 TITLE("TEST 8: SEEK and TELL\n");
 	 fd = open("test0");
 	 unsigned position = 5;
 	 seek(fd,position);
@@ -228,10 +223,10 @@ int main(void)
 
 	 if (newpos == NULL) {
 	 	ERROR("error in SEEK and TELL\n");
-	 }else	SUCCESS("TEST 9: Passed\n");
+	 }else	SUCCESS("TEST 8: Passed\n");
 
 //-----------------SYS_READ---------------console------------------------
-	TITLE("TEST 10: Reading from console\n");
+	TITLE("TEST 9: Reading from console\n");
 	printf("Type 10 characters: ");
 	bytes_read = read(STDIN_FILENO, sbuf, READ_CONSOLE_COUNT);
 	printf("\n");
@@ -243,7 +238,9 @@ int main(void)
 	}
 	printf("You have typed: %.*s\n", READ_CONSOLE_COUNT, sbuf);
 
-	SUCCESS("TEST 10: Passed\n");
+	SUCCESS("TEST 9: Passed\n");
+	
+//--------------------------------------------------
 
 	TITLE(
 		 "The test suite should now exit. Since SYS_WAIT is not implemented yet, the "
