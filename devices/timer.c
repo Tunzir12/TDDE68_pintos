@@ -9,7 +9,6 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
-#include <list.h>
 
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -22,21 +21,22 @@ static int64_t ticks;
 	Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+//lab3
+/* List of process is sleeping and in THREAD_BLOCKED state*/
+static struct list sleep_list;
+
+struct sleep_thread{
+	struct thread* t;
+	int64_t start_sleep;
+	int64_t time_ticks;
+	struct list_elem elem; /* List element. */
+};
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops(unsigned loops);
 static void busy_wait(int64_t loops);
 static void real_time_sleep(int64_t num, int32_t denom);
 static void real_time_delay(int64_t num, int32_t denom);
-
-
-// for sleep processes list
-struct list sleeping_threads;
-struct sleeping_elem{
-  struct thread* sleep_thread;
-  struct list_elem elem;
-  int64_t wake_tick;
-};
-
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
 	and registers the corresponding interrupt. */
@@ -44,10 +44,9 @@ void timer_init(const uint16_t timer_freq)
 {
 	TIMER_FREQ = timer_freq;
 	pit_configure_channel(0, 2, TIMER_FREQ);
-
-	list_init(&sleeping_threads);
-
 	intr_register_ext(0x20, timer_interrupt, "8254 Timer");
+
+	list_init(&sleep_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -91,37 +90,39 @@ int64_t timer_elapsed(int64_t then)
 	return timer_ticks() - then;
 }
 
-bool wake_tick_less_func(const struct list_elem* a,
-                         const struct list_elem* b, 
-                         void* aux){
-  return list_entry(a, struct sleeping_elem, elem)->wake_tick < 
-  list_entry(b, struct sleeping_elem, elem)->wake_tick;
-}
+bool
+	 time_cmp(const struct list_elem* a, const struct list_elem* b, void* aux){
+		struct sleep_thread *t1 = list_entry (a, struct sleep_thread, elem);
+		struct sleep_thread *t2 = list_entry (b, struct sleep_thread, elem);
+		int64_t t1_remain=t1->time_ticks-timer_elapsed(t1->start_sleep);
+		int64_t t2_remain=t2->time_ticks-timer_elapsed(t2->start_sleep);
+		return t1_remain<t2_remain;
+	 }
 
+
+void insert_to_sleep_queue(struct sleep_thread* st){
+	list_insert_ordered(&sleep_list,&st->elem,time_cmp,NULL);
+}
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
 	be turned on. */
 void timer_sleep(int64_t ticks)
 {
 	int64_t start = timer_ticks();
-	int64_t wake_tick = start + ticks;
 
 	ASSERT(intr_get_level() == INTR_ON);
-
-	struct thread *thread = thread_current();
 	enum intr_level old_level = intr_disable();
 
-	struct sleeping_elem* sleep_elem = (struct sleeping_elem*) malloc(sizeof(struct sleeping_elem));
-	sleep_elem->sleep_thread = thread_current();
-	sleep_elem->wake_tick = wake_tick;
-
-	list_insert_ordered(&sleeping_threads, &(sleep_elem->elem), wake_tick_less_func, NULL);
+	struct sleep_thread st;
+	st.t=thread_current();
+	st.start_sleep=start;
+	st.time_ticks=ticks;
+	insert_to_sleep_queue(&st);
 	thread_block();
-	free(sleep_elem);
 	intr_set_level(old_level);
-
-	thread_unblock(thread);
-
+	// while (timer_elapsed(start) < ticks) thread_yield();
 }
+
+
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
 	turned on. */
@@ -186,12 +187,34 @@ void timer_print_stats(void)
 	printf("Timer: %" PRId64 " ticks\n", timer_ticks());
 }
 
+void thread_timer_update_wakeup(void){
+	if(list_empty (&sleep_list)){
+		return;
+	}
+	struct list_elem* e = list_begin (&sleep_list);
+	while (e != list_end(&sleep_list))
+	{
+		struct sleep_thread *st = list_entry(e, struct sleep_thread, elem);
+		int64_t t_remain=st->time_ticks-timer_elapsed(st->start_sleep);
+		if( t_remain<=0){
+			e=list_remove(e);
+			thread_unblock(st->t);
+		}
+		else{
+			return; //since the list is sorted.
+		}
+	}
+}
 /* Timer interrupt handler. */
 static void timer_interrupt(struct intr_frame* args UNUSED)
 {
 	ticks++;
+	thread_timer_update_wakeup();
 	thread_tick();
 }
+
+
+
 
 /* Returns true if LOOPS iterations waits for more than one timer
 	tick, otherwise false. */
