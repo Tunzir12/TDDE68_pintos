@@ -119,6 +119,8 @@ void timer_sleep(int64_t ticks)
 	free(sleep_elem);
 	intr_set_level(old_level);
 
+	thread_unblock(thread);
+
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
