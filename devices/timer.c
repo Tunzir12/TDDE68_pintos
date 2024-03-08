@@ -93,9 +93,9 @@ int64_t timer_elapsed(int64_t then)
 }
 
 bool wake_tick_less_func(const struct list_elem* a,const struct list_elem* b, void* aux){
-		struct sleeping_elem sleep_thread_a = list_entry(a, struct sleeping_elem,elem);
-		struct sleeping_elem sleep_thread_b = list_entry(b, struct sleeping_elem,elem)
-  return sleep_thread_a->wake_tick < sleep_thread_b->wake_tick;
+	struct sleeping_elem sleep_thread_a = list_entry(a, struct sleeping_elem,elem);
+	struct sleeping_elem sleep_thread_b = list_entry(b, struct sleeping_elem,elem);
+  	return sleep_thread_a->wake_tick < sleep_thread_b->wake_tick;
 }
 
 
@@ -105,10 +105,6 @@ bool wake_tick_less_func(const struct list_elem* a,const struct list_elem* b, vo
 void
 timer_sleep (int64_t ticks)
 {
-	if(ticks <= 0){
-    	return;
-  	}
-
   	int64_t wake_up = timer_ticks() + ticks;
 
 	ASSERT (intr_get_level () == INTR_ON);
@@ -215,7 +211,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
     }
     else {
-		printf("if not working");
+		//printf("if not working");
 		return;
     }
 
